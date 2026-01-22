@@ -1,5 +1,4 @@
 -- valware.cc --
-
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -33,9 +32,6 @@ _G.HitboxExtendSize = 2
 _G.HitboxExtendTransparency = 0.5
 
 _G.AntiAimEnabled, _G.AntiAimSpeed = false, 100
-_G.ThirdPersonEnabled, _G.ThirdPersonKey = false, Enum.KeyCode.M
-_G.ThirdPersonDist = 12
-
 _G.NoRecoilEnabled, _G.RecoilStrength = false, 1
 _G.NoSpreadEnabled = false
 
@@ -108,7 +104,7 @@ task.spawn(function()
     end
 end)
 
--- Visuals & Combat
+-- Visuals & Wall Check
 local function ApplyCharms(v)
     if v == Player then return end
     local function add(char)
@@ -125,20 +121,26 @@ end
 for _, v in pairs(Players:GetPlayers()) do ApplyCharms(v) end
 Players.PlayerAdded:Connect(ApplyCharms)
 
+local function IsVisible(targetPart)
+    if not _G.AimbotWallCheck then return true end
+    local char = Player.Character
+    if not char then return false end
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = {char, targetPart.Parent, Camera}
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    local ray = workspace:Raycast(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position).Unit * 500, params)
+    return ray == nil
+end
+
 local function GetClosestPlayer()
     local target, dist = nil, _G.AimbotFov
-    local char = Player.Character
     for _, v in pairs(Players:GetPlayers()) do
         if v ~= Player and v.Character then
             local p = v.Character:FindFirstChild("HeadHB") or v.Character:FindFirstChild("Head")
             local h = v.Character:FindFirstChildOfClass("Humanoid")
             if p and h and h.Health > 0 then
                 local pos, onScreen = Camera:WorldToViewportPoint(p.Position)
-                if onScreen then
-                    if _G.AimbotWallCheck then
-                        local parts = Camera:GetPartsObscuringTarget({p.Position}, {char, v.Character})
-                        if #parts > 0 then continue end
-                    end
+                if onScreen and IsVisible(p) then
                     local mag = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
                     if mag < dist then target = p; dist = mag end
                 end
@@ -147,8 +149,7 @@ local function GetClosestPlayer()
     end
     return target
 end
-
--- UI Setup
+-- valware.cc --
 local ScreenGui = Instance.new("ScreenGui", (game:GetService("CoreGui") or Player:FindFirstChild("PlayerGui")))
 local VelLabel = Instance.new("TextLabel", ScreenGui)
 VelLabel.Size = UDim2.new(0, 100, 0, 20); VelLabel.Position = UDim2.new(0.5, -50, 0.5, 50)
@@ -251,8 +252,6 @@ addSlider("Recoil Power", 0, 5, "RecoilStrength", rPage, true)
 addToggle("Spin Bot", "AntiAimEnabled", rPage)
 addSlider("Spin Speed", 0, 250, "AntiAimSpeed", rPage)
 
-addToggle("Third Person", "ThirdPersonEnabled", vPage, "ThirdPersonKey")
-addSlider("TP Distance", 5, 50, "ThirdPersonDist", vPage)
 addToggle("ESP Charms", "EspCharmsEnabled", vPage)
 addToggle("Night Mode", "NightModeEnabled", vPage)
 
@@ -277,7 +276,7 @@ RunService.Heartbeat:Connect(function(dt)
 
     local moveParams = RaycastParams.new(); moveParams.FilterDescendantsInstances = {char}; moveParams.FilterType = Enum.RaycastFilterType.Exclude  
 
-    -- Fixed Jump Bug
+    -- Jump Bug (Ver 2.6)
     if _G.JumpBugEnabled and UserInputService:IsKeyDown(_G.JumpBugKey ~= Enum.KeyCode.Unknown and _G.JumpBugKey or Enum.KeyCode.Space) then  
         local cast = workspace:Raycast(root.Position, Vector3.new(0, -hum.HipHeight - 2.1, 0), moveParams)
         if cast and root.Velocity.Y < 0 then
@@ -329,7 +328,7 @@ RunService.Heartbeat:Connect(function(dt)
     root.Anchored = (_G.AirStuckEnabled and UserInputService:IsKeyDown(_G.AirStuckKey))
 end)
 
--- Rendering
+-- Rendering Loop
 RunService.RenderStepped:Connect(function()
     local char = Player.Character; local root = char and char:FindFirstChild("HumanoidRootPart")
     for _, v in pairs(Players:GetPlayers()) do
@@ -339,14 +338,20 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- Third Person Fixed
-    if _G.ThirdPersonEnabled and char and root then
-        local startPos = root.Position + Vector3.new(0, 2, 0)
-        local cameraRot = Camera.CFrame - Camera.CFrame.Position
-        local target = startPos - (cameraRot * Vector3.new(0, 0, _G.ThirdPersonDist)).Position
-        local ray = workspace:Raycast(startPos, (target - startPos), RaycastParams.new())
-        Camera.CFrame = CFrame.new(ray and ray.Position or target, startPos)
-        for _, v in pairs(char:GetDescendants()) do if v:IsA("BasePart") then v.LocalTransparencyModifier = 0 end end
+    if _G.NoRecoilEnabled then Camera.CFrame = Camera.CFrame * CFrame.Angles(math.random(-_G.RecoilStrength, _G.RecoilStrength)/100, math.random(-_G.RecoilStrength, _G.RecoilStrength)/100, 0) end
+    Grad.Offset = Vector2.new(math.sin(tick() * 1.5) * 0.5, 0)
+    Watermark.Visible = _G.WatermarkEnabled
+    WText.Text = string.format(" valware.cc | %d fps | %d ms | beta ", math.floor(1/RunService.RenderStepped:Wait()), math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()))
+    if _G.AimbotEnabled and IsTargeting then
+        local t = GetClosestPlayer()
+        if t then Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, t.Position), _G.AimbotSmoothness) end
     end
+end)
 
- 
+UserInputService.InputBegan:Connect(function(i, g)
+    if not g then
+        if i.KeyCode == _G.MenuKey then Main.Visible = not Main.Visible end
+        if i.KeyCode == _G.AimbotKey then IsTargeting = true end
+    end
+end)
+UserInputService.InputEnded:Connect(function(i) if i.KeyCode == _G.AimbotKey then IsTargeting = false end end)
