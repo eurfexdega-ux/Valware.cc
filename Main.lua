@@ -1,4 +1,4 @@
--- valware.cc -- PART 1
+-- valware.cc --
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -39,7 +39,7 @@ _G.WatermarkEnabled, _G.ShowVelocity, _G.ShowNotifs = true, true, true
 _G.MenuKey = Enum.KeyCode.End
 _G.AccentColor = Color3.fromRGB(0, 255, 120)
 
--- New No Spread / No Recoil System
+-- New No Spread / No Recoil System (Lồng ghép từ mã của bạn)
 local original_spread = {}
 local rep = game:GetService("ReplicatedStorage")
 local ws = workspace
@@ -105,6 +105,20 @@ task.spawn(function()
     end
 end)
 
+-- Charms & Wall Check
+local function ApplyCharms(v)
+    if v == Player then return end
+    local function add(char)
+        if not char then return end
+        local h = char:FindFirstChild("ValCharms") or Instance.new("Highlight")
+        h.Name = "ValCharms"; h.Parent = char; h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop; h.FillColor = _G.AccentColor
+    end
+    v.CharacterAdded:Connect(add)
+    if v.Character then add(v.Character) end
+end
+for _, v in pairs(Players:GetPlayers()) do ApplyCharms(v) end
+Players.PlayerAdded:Connect(ApplyCharms)
+
 local function IsVisible(targetPart)
     if not _G.AimbotWallCheck then return true end
     local char = Player.Character
@@ -133,7 +147,7 @@ local function GetClosestPlayer()
     end
     return target
 end
--- valware.cc -- PART 2
+-- valware.cc --
 local ScreenGui = Instance.new("ScreenGui", (game:GetService("CoreGui") or Player:FindFirstChild("PlayerGui")))
 local VelLabel = Instance.new("TextLabel", ScreenGui)
 VelLabel.Size = UDim2.new(0, 100, 0, 20); VelLabel.Position = UDim2.new(0.5, -50, 0.5, 50)
@@ -214,6 +228,7 @@ addToggle("ESP Charms", "EspCharmsEnabled", vPage)
 addToggle("Night Mode", "NightModeEnabled", vPage)
 addToggle("Watermark", "WatermarkEnabled", miPage)
 
+-- Lồng ghép toggle cho No Spread mới
 addToggle("No Spread", "NoSpreadEnabled", miPage, nil, function(Value)
     if Value then scan_for_weapons() apply_no_spread_all() else restore_spread_all() end
 end)
@@ -229,6 +244,7 @@ RunService.Heartbeat:Connect(function(dt)
 
     local moveParams = RaycastParams.new(); moveParams.FilterDescendantsInstances = {char}; moveParams.FilterType = Enum.RaycastFilterType.Exclude  
 
+    -- Jump Bug (Ver 2.6)
     if _G.JumpBugEnabled and UserInputService:IsKeyDown(_G.JumpBugKey ~= Enum.KeyCode.Unknown and _G.JumpBugKey or Enum.KeyCode.Space) then  
         local cast = workspace:Raycast(root.Position, Vector3.new(0, -hum.HipHeight - 2.1, 0), moveParams)
         if cast and root.Velocity.Y < 0 then
@@ -238,6 +254,7 @@ RunService.Heartbeat:Connect(function(dt)
         end
     end  
 
+    -- Edge Bug & Others
     if _G.EdgeBugEnabled and UserInputService:IsKeyDown(_G.EdgeBugKey) then  
         if not workspace:Raycast(root.Position, Vector3.new(0, -5, 0), moveParams) and hum.FloorMaterial == Enum.Material.Air and root.Velocity.Y < -5 then  
             root.AssemblyLinearVelocity = Vector3.new(root.Velocity.X, -0.001, root.Velocity.Z); notify("EB")  
@@ -259,6 +276,7 @@ RunService.Heartbeat:Connect(function(dt)
 end)
 
 RunService.RenderStepped:Connect(function()
+    for _, v in pairs(Players:GetPlayers()) do if v ~= Player and v.Character then local h = v.Character:FindFirstChild("ValCharms") if h then h.Enabled = _G.EspCharmsEnabled end end end
     Watermark.Visible = _G.WatermarkEnabled
     WText.Text = string.format(" valware.cc | %d fps | %d ms | beta ", math.floor(1/RunService.RenderStepped:Wait()), math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()))
     if _G.AimbotEnabled and IsTargeting then
